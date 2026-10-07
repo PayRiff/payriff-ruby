@@ -10,14 +10,14 @@ module CardKeys
   end
 
   def self.public_base64
-    Base64.strict_encode64(private_key.public_to_der)
+    [private_key.public_to_der].pack("m0")
   end
 
   def self.decrypt(secret_key, encrypted_message)
-    key_and_iv = private_key.decrypt(Base64.strict_decode64(secret_key), Payriff::CardEncryptor::OAEP)
+    key_and_iv = private_key.decrypt(secret_key.unpack1("m0"), Payriff::CardEncryptor::OAEP)
     raise "bad key length #{key_and_iv.bytesize}" unless key_and_iv.bytesize == 44
 
-    data = Base64.strict_decode64(encrypted_message)
+    data = encrypted_message.unpack1("m0")
     cipher = OpenSSL::Cipher.new("aes-256-gcm").decrypt
     cipher.key = key_and_iv[0, 32]
     cipher.iv = key_and_iv[32, 12]
@@ -58,8 +58,8 @@ class CardTest < Minitest::Test
   end
 
   def test_rejects_non_rsa_and_private_keys
-    ec = Base64.strict_encode64(OpenSSL::PKey::EC.generate("prime256v1").public_to_der)
-    private_der = Base64.strict_encode64(CardKeys.private_key.private_to_der)
+    ec = [OpenSSL::PKey::EC.generate("prime256v1").public_to_der].pack("m0")
+    private_der = [CardKeys.private_key.private_to_der].pack("m0")
 
     [ec, private_der].each do |key|
       assert_equal "Invalid RSA public key", assert_raises(ArgumentError) { Payriff::CardEncryptor.parse_key(key) }.message

@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require "base64"
 require "json"
 require "openssl"
 
@@ -75,7 +74,7 @@ module Payriff
 
     def parse_key(base64_or_pem)
       body = base64_or_pem.to_s.gsub(/-----(BEGIN|END) PUBLIC KEY-----|\s/, "")
-      key = OpenSSL::PKey.read(Base64.strict_decode64(body))
+      key = OpenSSL::PKey.read(body.unpack1("m0"))
       raise ArgumentError, "Invalid RSA public key" unless key.is_a?(OpenSSL::PKey::RSA) && !key.private?
 
       key
@@ -91,7 +90,7 @@ module Payriff
       cipher.iv = iv
       ciphertext = cipher.update(payload) + cipher.final + cipher.auth_tag(16)
       secret = public_key.encrypt(aes_key + iv, OAEP)
-      { message: Base64.strict_encode64(ciphertext), secret_key: Base64.strict_encode64(secret) }
+      { message: [ciphertext].pack("m0"), secret_key: [secret].pack("m0") }
     end
   end
 end
