@@ -11,12 +11,10 @@ transactions, payouts and invoices.
 
 ```ruby
 # Gemfile
-gem "payriff", github: "PayRiff/payriff-ruby", tag: "v0.1.1"
+gem "payriff"
 ```
 
-Then run `bundle install`.
-
-> RubyGems publishing is coming. After that, the Gemfile line becomes `gem "payriff"`.
+Then run `bundle install`, or install it directly with `gem install payriff`.
 
 ## Quick start
 

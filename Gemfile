@@ -4,5 +4,6 @@ source "https://rubygems.org"
 
 gemspec
 
+gem "logger"
 gem "minitest", ">= 5.20"
 gem "rake", ">= 13"
