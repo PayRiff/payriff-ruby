@@ -16,6 +16,5 @@ Gem::Specification.new do |spec|
   spec.metadata = {
     "source_code_uri" => "https://github.com/PayRiff/payriff-ruby",
     "changelog_uri" => "https://github.com/PayRiff/payriff-ruby/blob/main/CHANGELOG.md",
-    "rubygems_mfa_required" => "true"
   }
 end
