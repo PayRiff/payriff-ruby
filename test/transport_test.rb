@@ -143,7 +143,6 @@ class TransportTest < PayriffTest
 
   def test_client_validation
     assert_equal "app_key is required", assert_raises(ArgumentError) { Payriff::Client.new(app_key: " ") }.message
-    assert_equal "Invalid RSA public key", assert_raises(ArgumentError) { Payriff::Client.new(app_key: "k", card_encryption_key: "nope") }.message
 
     client = Payriff::Client.new(app_key: "k")
     %i[orders payments cards transactions payouts invoices].each { |s| refute_nil client.public_send(s) }

@@ -6,7 +6,7 @@ Gem::Specification.new do |spec|
   spec.name = "payriff"
   spec.version = Payriff::VERSION
   spec.summary = "Ruby client for the Payriff merchant API"
-  spec.description = "Orders, direct card payments, saved cards, transactions, payouts and invoices for Payriff merchants."
+  spec.description = "Orders, saved-card payments, saved cards, transactions, payouts and invoices for Payriff merchants."
   spec.homepage = "https://github.com/PayRiff/payriff-ruby"
   spec.license = "MIT"
   spec.authors = ["Payriff"]

@@ -1,11 +1,11 @@
 # Payriff Ruby SDK
 
-Ruby client for the Payriff merchant API: orders, direct (host-to-host) card payments, saved cards,
+Ruby client for the Payriff merchant API: orders, saved-card payments, saved cards,
 transactions, payouts and invoices.
 
 - Ruby 3.1 or newer
-- No runtime dependencies (standard library `net/http`, `json` and `openssl` only)
-- Talks to `https://api.payriff.com`
+- No runtime dependencies (standard library `net/http` and `json` only)
+- Talks to `https://api.payriff.com` (Azerbaijan) or `https://api.gccpay.sa` (Saudi Arabia)
 
 ## Installation
 
@@ -47,16 +47,31 @@ Create one `Payriff::Client` and reuse it.
 | `merchant_id:` | for payouts and invoices | — | Merchant ID (e.g. `ES1000000`). |
 | `timeout:` | no | `60` | Read/write timeout in seconds. Bank operations can take tens of seconds. |
 | `open_timeout:` | no | `10` | Connection timeout in seconds. |
-| `card_encryption_key:` | no | built-in Payriff key | Only if Payriff rotates the card-encryption key. Base64 or PEM. |
+| `region:` | no | `:azerbaijan` | API region: `:azerbaijan` or `:saudi`. Sets the base URL and the default currency. |
+| `base_url:` | no | from `region:` | Override the API URL, e.g. for testing. The currency still comes from `region:`. |
 
 Keep the app key in an environment variable or secret store. Never commit it.
+
+### Saudi Arabia
+
+```ruby
+payriff = Payriff::Client.new(app_key: ENV.fetch("PAYRIFF_APP_KEY"), region: :saudi)
+```
+
+| Region | API | Default currency |
+|---|---|---|
+| `:azerbaijan` | `https://api.payriff.com` | `AZN` |
+| `:saudi` | `https://api.gccpay.sa` | `SAR` |
+
+Use the app key from the dashboard of the same region (`dashboard.gccpay.sa` for Saudi Arabia).
+A `currency:` passed on a request always wins over the region default.
 
 ## Orders
 
 ```ruby
 created = payriff.orders.create(
   amount: "25.00",
-  currency: "AZN",            # default AZN
+  currency: "AZN",            # default: the region currency
   operation: "PRE_AUTH",      # default PURCHASE
   language: "AZ",
   description: "Booking #77",
@@ -79,38 +94,7 @@ Enum arguments also accept symbols (`language: :az`).
 
 Amounts can be passed as numeric strings (`"10.50"`), integers, floats or `BigDecimal`s.
 
-## Direct payments (host-to-host)
-
-You collect the card details yourself, and the SDK encrypts them before sending
-(AES-256-GCM + RSA-OAEP). Raw card data never leaves your server in clear text, but your
-systems still handle card data, so PCI DSS requirements apply to you.
-
-```ruby
-result = payriff.payments.direct_pay(
-  amount: "1.00",
-  description: "Order #1002",
-  callback_url: "https://shop.example/payriff/callback",
-  request_rrn: "order-1002",
-  card: Payriff::Card.new(
-    pan: "4169 7413 3015 1979",
-    card_holder: "JOHN DOE",
-    expiry_month: "11",
-    expiry_year: "27",
-    cvv: "123"
-  )
-)
-
-if result.redirect
-  # 3-D Secure: send the customer's browser to result.redirect_url.
-  # The final status arrives via your callback or payriff.orders.get(result.order_id).
-end
-```
-
-`Payriff::Card` strips spaces and dashes, pads the month (`1` → `01`), expands a 2-digit year
-(`27` → `2027`) and rejects malformed values before any network call. It is frozen, prints and logs
-with a masked number and no CVV, and cannot be serialized with `Marshal`.
-
-### Charging a saved card
+## Charging a saved card
 
 ```ruby
 charge = payriff.payments.auto_pay(

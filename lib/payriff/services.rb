@@ -5,8 +5,9 @@ module Payriff
     class Base
       include Util
 
-      def initialize(transport)
+      def initialize(transport, default_currency = nil)
         @transport = transport
+        @default_currency = default_currency
       end
 
       def inspect
@@ -15,12 +16,12 @@ module Payriff
     end
 
     class Orders < Base
-      def create(amount:, currency: "AZN", language: nil, operation: "PURCHASE", description: nil, callback_url: nil,
+      def create(amount:, currency: nil, language: nil, operation: "PURCHASE", description: nil, callback_url: nil,
                  redirect_url: nil, card_save: nil, three_ds: nil, auto_payment_type: nil, installment: nil,
                  full_name: nil, phone_number: nil, metadata: nil, fields: nil, request_rrn: nil)
         body = compact(
           "amount" => to_amount(required(amount, "amount"), "amount"),
-          "currency" => stringify(currency),
+          "currency" => stringify(currency || @default_currency),
           "language" => stringify(language),
           "operation" => stringify(operation),
           "description" => description,
@@ -76,37 +77,13 @@ module Payriff
     end
 
     class Payments < Base
-      def initialize(transport, public_key)
-        super(transport)
-        @public_key = public_key
-      end
-
-      def direct_pay(amount:, description:, card:, operation: "PURCHASE", currency: "AZN", callback_url: nil,
-                     three_ds: nil, custom_fields: nil, card_save: false, request_rrn: nil)
-        body = compact(
-          "amount" => to_amount(required(amount, "amount"), "amount"),
-          "operation" => stringify(operation),
-          "currency" => stringify(currency),
-          "description" => required(description, "description"),
-          "callbackUrl" => callback_url,
-          "threeDS" => three_ds,
-          "customFields" => custom_fields
-        )
-        raise ArgumentError, "card must be a Payriff::Card" unless card.is_a?(Card)
-
-        encrypted = card.encrypted_payload(@public_key)
-        body["paymentData"] = { "paymentWay" => "DIRECT", "encryptedMessage" => encrypted[:message], "cardSave" => card_save ? true : false }
-        @transport.execute("POST", "/api/v3/directPay",
-                           headers: { "X-REQUEST-RRN" => request_rrn, "x-secret-key" => encrypted[:secret_key] }, body: body)
-      end
-
-      def auto_pay(card_uuid:, amount:, description:, operation: "PURCHASE", currency: "AZN", callback_url: nil,
+      def auto_pay(card_uuid:, amount:, description:, operation: "PURCHASE", currency: nil, callback_url: nil,
                    three_ds: nil, one_click_payment: nil, request_rrn: nil)
         body = compact(
           "cardUuid" => required(card_uuid, "card_uuid"),
           "amount" => to_amount(required(amount, "amount"), "amount"),
           "operation" => stringify(operation),
-          "currency" => stringify(currency),
+          "currency" => stringify(currency || @default_currency),
           "description" => required(description, "description"),
           "callbackUrl" => callback_url,
           "threeDS" => three_ds,
@@ -207,7 +184,7 @@ module Payriff
     end
 
     class Invoices < Base
-      def create(amount: nil, amount_dynamic: nil, currency: "AZN", language: nil, full_name: nil, email: nil,
+      def create(amount: nil, amount_dynamic: nil, currency: nil, language: nil, full_name: nil, email: nil,
                  phone_number: nil, description: nil, custom_message: nil, expire_date: nil, approve_url: nil,
                  cancel_url: nil, decline_url: nil, redirect_url: nil, installment_product_type: nil,
                  installment_period: nil, direct_pay: nil, send_sms: nil, send_whatsapp: nil, send_email: nil,
@@ -217,7 +194,7 @@ module Payriff
         body = compact(
           "amount" => to_amount(amount, "amount"),
           "amountDynamic" => amount_dynamic,
-          "currencyType" => stringify(currency),
+          "currencyType" => stringify(currency || @default_currency),
           "languageType" => stringify(language),
           "fullName" => full_name,
           "email" => email,

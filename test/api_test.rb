@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require_relative "card_test"
 
 class OrdersTest < PayriffTest
   ORDER_INFO = {
@@ -102,45 +101,6 @@ class OrdersTest < PayriffTest
 end
 
 class PaymentsTest < PayriffTest
-  def test_direct_pay_encrypts_card_and_sends_secret_key
-    @server.ok("POST", "/api/v3/directPay", {
-      "orderId" => "ORD-1", "threeDS" => true, "redirect" => true, "redirectUrl" => "https://acs.bank/3ds",
-      "transactionResponse" => { "status" => "CREATED", "requestRrn" => "req-1" }
-    })
-
-    response = @server.client(card_encryption_key: CardKeys.public_base64).payments.direct_pay(
-      amount: 1,
-      description: "Order #1",
-      callback_url: "https://shop.az/cb",
-      card_save: true,
-      request_rrn: "rrn-1",
-      card: Payriff::Card.new(pan: "4169741330151979", card_holder: "JOHN DOE", expiry_month: "11", expiry_year: "2027", cvv: "123")
-    )
-
-    sent = @server.last
-    assert_equal "rrn-1", sent.headers["x-request-rrn"]
-    refute_includes sent.body, "4169741330151979"
-    refute_includes sent.body, "JOHN DOE"
-    body = sent.json
-    payment_data = body.delete("paymentData")
-    assert_equal({ "amount" => 1.0, "operation" => "PURCHASE", "currency" => "AZN", "description" => "Order #1",
-                   "callbackUrl" => "https://shop.az/cb" }, body)
-    assert_equal ["DIRECT", true], [payment_data["paymentWay"], payment_data["cardSave"]]
-    assert_equal '{"pan":"4169741330151979","cardHolder":"JOHN DOE","expiryYear":"2027","expiryMonth":"11","cvv":"123"}',
-                 CardKeys.decrypt(sent.headers["x-secret-key"], payment_data["encryptedMessage"])
-    assert_equal ["ORD-1", true, true, "https://acs.bank/3ds", "CREATED"],
-                 [response.order_id, response.three_ds, response.redirect, response.redirect_url, response.transaction_response.status]
-  end
-
-  def test_direct_pay_requires_card
-    error = assert_raises(ArgumentError) do
-      @server.client.payments.direct_pay(amount: 1, description: "x", card: { pan: "4169741330151979" })
-    end
-
-    assert_equal "card must be a Payriff::Card", error.message
-    assert_empty @server.requests
-  end
-
   def test_auto_pay_sends_explicit_currency_and_one_click_flag
     @server.ok("POST", "/api/v3/autoPay", {
       "orderId" => "ORD-2", "amount" => 3.0, "paymentStatus" => "APPROVED", "auto" => true,
@@ -286,6 +246,43 @@ class InvoicesTest < PayriffTest
     assert_equal "amount is required", assert_raises(ArgumentError) { @server.client.invoices.create }.message
     @server.client.invoices.create(amount_dynamic: true)
     assert_equal({ "amountDynamic" => true, "currencyType" => "AZN" }, @server.last.json["body"])
+  end
+end
+
+class RegionTest < PayriffTest
+  def base_url(client)
+    client.orders.instance_variable_get(:@transport).instance_variable_get(:@base_uri).to_s
+  end
+
+  def test_regions_map_to_base_url
+    assert_equal "https://api.payriff.com", base_url(Payriff::Client.new(app_key: "k"))
+    assert_equal "https://api.gccpay.sa", base_url(Payriff::Client.new(app_key: "k", region: :saudi))
+    assert_equal "https://api.gccpay.sa", base_url(Payriff::Client.new(app_key: "k", region: "saudi"))
+    assert_equal "unknown region: ksa", assert_raises(ArgumentError) { Payriff::Client.new(app_key: "k", region: :ksa) }.message
+  end
+
+  def test_saudi_defaults_to_sar
+    client = @server.client(region: :saudi)
+
+    @server.ok("POST", "/api/v3/orders", { "orderId" => "ORD-1" })
+    client.orders.create(amount: 1)
+    assert_equal "SAR", @server.last.json["currency"]
+
+    @server.ok("POST", "/api/v3/autoPay", { "orderId" => "ORD-2" })
+    client.payments.auto_pay(card_uuid: "card-1", amount: 1, description: "x")
+    assert_equal "SAR", @server.last.json["currency"]
+
+    @server.ok("POST", "/api/v2/invoices", { "invoiceUuid" => "inv-1" })
+    client.invoices.create(amount: 1)
+    assert_equal "SAR", @server.last.json["body"]["currencyType"]
+  end
+
+  def test_explicit_currency_wins_over_region
+    @server.ok("POST", "/api/v3/orders", { "orderId" => "ORD-1" })
+
+    @server.client(region: :saudi).orders.create(amount: 1, currency: "USD")
+
+    assert_equal "USD", @server.last.json["currency"]
   end
 end
 
